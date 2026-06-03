@@ -24,7 +24,9 @@ extern void vel_step ( int N, float * u, float * v, float * u0, float * v0, floa
 static int N;
 static float dt, diff, visc;
 static float force, source;
+static int is_drawing_wall = 0; // Flag para alternar entre desenho de paredes e adição de tinta
 static int dvel;
+static int type;
 
 // Matrizes de Velocidade
 static float * u, * v, * u_prev, * v_prev;
@@ -81,6 +83,27 @@ float get_density_from_color(unsigned char r, unsigned char g, unsigned char b) 
     return 0.0f;
 }
 
+void compute_normals() {
+    const float SQRT1_2 = 0.7071067811865476f;
+
+    for (int i = 1; i <= N; ++i) {
+        for (int j = 1; j <= N; ++j) {
+            walls_norm_u[IX(i, j)] += SQRT1_2 * walls[IX(i - 1, j + 1)] + 0.0f * walls[IX(i, j + 1)] - SQRT1_2 * walls[IX(i + 1, j + 1)];
+            walls_norm_u[IX(i, j)] += 1.0f    * walls[IX(i - 1, j)]     + 0.0f * walls[IX(i, j)]     - 1.0f    * walls[IX(i + 1, j)];
+            walls_norm_u[IX(i, j)] += SQRT1_2 * walls[IX(i - 1, j - 1)] + 0.0f * walls[IX(i, j - 1)] - SQRT1_2 * walls[IX(i + 1, j - 1)];
+            
+            walls_norm_v[IX(i, j)] += -SQRT1_2 * walls[IX(i - 1, j + 1)] - 1.0f * walls[IX(i, j + 1)] - SQRT1_2 * walls[IX(i + 1, j + 1)];
+            walls_norm_v[IX(i, j)] += 0.0f     * walls[IX(i - 1, j)]     + 0.0f * walls[IX(i, j)]     - 0.0f    * walls[IX(i + 1, j)];
+            walls_norm_v[IX(i, j)] += SQRT1_2  * walls[IX(i - 1, j - 1)] + 1.0f * walls[IX(i, j - 1)] + SQRT1_2 * walls[IX(i + 1, j - 1)];
+            
+            float norm = sqrtf(walls_norm_u[IX(i, j)] * walls_norm_u[IX(i, j)] + walls_norm_v[IX(i, j)] * walls_norm_v[IX(i, j)]);
+            if (norm < 1e-3) continue;
+            walls_norm_u[IX(i, j)] /= norm;
+            walls_norm_v[IX(i, j)] /= norm;
+        }
+    }
+}
+
 static void clear_data ( void )
 {
     int i, size=(N+2)*(N+2);
@@ -109,38 +132,19 @@ static void clear_data ( void )
             int img_j = (j * w) / max_size;
             int img_idx = (img_i * w + img_j) * 3;
 
-			//dens_r[IX(j, max_size - i - 1)] = img[img_idx + 0] / 255.0f;
-			//dens_g[IX(j, max_size - i - 1)] = img[img_idx + 1] / 255.0f;
-			//dens_b[IX(j, max_size - i - 1)] = img[img_idx + 2] / 255.0f;
-            walls[IX(j, max_size - i - 1)] = get_density_from_color(img[img_idx + 0], img[img_idx + 1], img[img_idx + 2]);
+            if (type){
+                dens_r[IX(j, max_size - i - 1)] = img[img_idx + 0] / 255.0f;
+                dens_g[IX(j, max_size - i - 1)] = img[img_idx + 1] / 255.0f;
+                dens_b[IX(j, max_size - i - 1)] = img[img_idx + 2] / 255.0f;
+            } else {
+                walls[IX(j, max_size - i - 1)] = get_density_from_color(img[img_idx + 0], img[img_idx + 1], img[img_idx + 2]);
+            }
         }
     }
 
     stbi_image_free(img);
 
-    // parede diagonal no canto inferior-esquerdo
-    for (int i = 0; i < 50; ++i) {
-        walls[IX(0 + i, 50 - i)] = 1.0f;
-    }
-    
-    const float SQRT1_2 = 0.7071067811865476f;
-
-    for (int i = 1; i <= N; ++i) {
-        for (int j = 1; j <= N; ++j) {
-            walls_norm_u[IX(i, j)] += SQRT1_2 * walls[IX(i - 1, j + 1)] + 0.0f * walls[IX(i, j + 1)] - SQRT1_2 * walls[IX(i + 1, j + 1)];
-            walls_norm_u[IX(i, j)] += 1.0f    * walls[IX(i - 1, j)]     + 0.0f * walls[IX(i, j)]     - 1.0f    * walls[IX(i + 1, j)];
-            walls_norm_u[IX(i, j)] += SQRT1_2 * walls[IX(i - 1, j - 1)] + 0.0f * walls[IX(i, j - 1)] - SQRT1_2 * walls[IX(i + 1, j - 1)];
-            
-            walls_norm_v[IX(i, j)] += -SQRT1_2 * walls[IX(i - 1, j + 1)] - 1.0f * walls[IX(i, j + 1)] - SQRT1_2 * walls[IX(i + 1, j + 1)];
-            walls_norm_v[IX(i, j)] += 0.0f     * walls[IX(i - 1, j)]     + 0.0f * walls[IX(i, j)]     - 0.0f    * walls[IX(i + 1, j)];
-            walls_norm_v[IX(i, j)] += SQRT1_2  * walls[IX(i - 1, j - 1)] + 1.0f * walls[IX(i, j - 1)] + SQRT1_2 * walls[IX(i + 1, j - 1)];
-            
-            float norm = sqrtf(walls_norm_u[IX(i, j)] * walls_norm_u[IX(i, j)] + walls_norm_v[IX(i, j)] * walls_norm_v[IX(i, j)]);
-            if (norm < 1e-3) continue;
-            walls_norm_u[IX(i, j)] /= norm;
-            walls_norm_v[IX(i, j)] /= norm;
-        }
-    }
+    compute_normals();
 }
 
 static int allocate_data ( void )
@@ -367,12 +371,18 @@ static void get_from_UI ( float * dr, float * dg, float * db, float * u_ui, floa
 
             // Botão Direito: Tinta com cor aleatória
             if ( mouse_down[2] ) {
-                dr[index] = current_r * source;
-                dg[index] = current_g * source;
-                db[index] = current_b * source;
+                if (is_drawing_wall) {
+                    walls[index] = 1.0f; // Marca como parede
+                } else {
+                    dr[index] = current_r * source;
+                    dg[index] = current_g * source;
+                    db[index] = current_b * source;
+                }
             }
         }
     }
+
+    compute_normals();
 
     omx = mx;
     omy = my;
@@ -403,7 +413,13 @@ static void key_func ( unsigned char key, int x, int y )
         case 'V':
             dvel = !dvel;
             break;
+
+        case 'w':
+        case 'W':
+            is_drawing_wall = !is_drawing_wall;
+            break;
     }
+
 }
 
 static void mouse_func ( int button, int state, int x, int y )
@@ -415,6 +431,7 @@ static void mouse_func ( int button, int state, int x, int y )
 
     // Gera cor nova ao clicar com direito
     if (button == 2 && state == GLUT_DOWN) {
+
         current_r = (float)rand() / RAND_MAX;
         current_g = (float)rand() / RAND_MAX;
         current_b = (float)rand() / RAND_MAX;
@@ -443,9 +460,17 @@ static void idle_func ( void )
 
     vel_step ( N, u, v, u_prev, v_prev, visc, dt, walls_norm_u, walls_norm_v, walls );
     
-    dens_step ( N, dens_r, dens_r_prev, u, v, diff, dt );
-    dens_step ( N, dens_g, dens_g_prev, u, v, diff, dt );
-    dens_step ( N, dens_b, dens_b_prev, u, v, diff, dt ); 
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        dens_step ( N, dens_r, dens_r_prev, u, v, diff, dt );
+        
+        #pragma omp section
+        dens_step ( N, dens_g, dens_g_prev, u, v, diff, dt );
+        
+        #pragma omp section
+        dens_step ( N, dens_b, dens_b_prev, u, v, diff, dt ); 
+    }
     
     glutPostRedisplay ();
 }
@@ -473,7 +498,7 @@ static void open_glut_window ( void )
 
     glutInitWindowPosition ( 0, 0 );
     glutInitWindowSize ( win_x, win_y );
-    win_id = glutCreateWindow ( "Fluido Interativo RGB - Pincel & Vento" );
+    win_id = glutCreateWindow ( "Fluido Interativo - Universo UFPR 2026" );
 
     glClearColor ( 1.0f, 1.0f, 1.0f, 1.0f );
     glClear ( GL_COLOR_BUFFER_BIT );
@@ -502,9 +527,10 @@ int main ( int argc, char ** argv )
 {
     glutInit ( &argc, argv );
 
-    if ( argc != 1 && argc != 7 ) {
-        fprintf ( stderr, "usage : %s N dt diff visc force source\n", argv[0] );
+    if ( argc > 8 ) {
+        fprintf ( stderr, "usage : %s type N dt diff visc force source\n", argv[0] );
         fprintf ( stderr, "where:\n" );\
+        fprintf ( stderr, "\t type   : simulation type (0 for obstacles and 1 for no obstacles)\n" );
         fprintf ( stderr, "\t N      : grid resolution\n" );
         fprintf ( stderr, "\t dt     : time step\n" );
         fprintf ( stderr, "\t diff   : diffusion rate of the density\n" );
@@ -514,22 +540,35 @@ int main ( int argc, char ** argv )
         exit ( 1 );
     }
 
+    type = 0;
+    N = 256;
+    dt = 0.1f;
+    diff = 0.0f;
+    visc = 0.0f;
+    force = 5.0f;
+    source = 100.0f;
+
+    switch (argc) {
+        case 8:
+            source = atof(argv[7]);
+        case 7:
+            force = atof(argv[6]);
+        case 6:
+            visc = atof(argv[5]);
+        case 5:
+            diff = atof(argv[4]);
+        case 4:
+            dt = atof(argv[3]);
+        case 3:
+            N = atoi(argv[2]);
+        case 2:
+            type = atoi(argv[1]);
+            break;
+    }
+
     if ( argc == 1 ) {
-        N = 256;
-        dt = 0.1f;
-        diff = 0.0f;
-        visc = 0.0f;
-        force = 5.0f;
-        source = 100.0f;
-        fprintf ( stderr, "Using defaults : N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
-            N, dt, diff, visc, force, source );
-    } else {
-        N = atoi(argv[1]);
-        dt = atof(argv[2]);
-        diff = atof(argv[3]);
-        visc = atof(argv[4]);
-        force = atof(argv[5]);
-        source = atof(argv[6]);
+        fprintf ( stderr, "Using defaults : type=%d N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
+            type, N, dt, diff, visc, force, source );
     }
 
     printf ( "\n\nHow to use this demo:\n\n" );

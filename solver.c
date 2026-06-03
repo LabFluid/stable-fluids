@@ -1,6 +1,6 @@
 #define IX(i,j) ((i)+(N+2)*(j))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
-#define FOR_EACH_CELL for ( i=1 ; i<=N ; i++ ) { for ( j=1 ; j<=N ; j++ ) {
+#define FOR_EACH_CELL for ( j=1 ; j<=N ; j++ ) { for ( i=1 ; i<=N ; i++ ) {
 #define END_FOR }}
 
 void add_source ( int N, float * x, float * s, float dt )
@@ -62,7 +62,7 @@ void diffuse ( int N, int b, float * x, float * x0, float diff, float dt )
 	lin_solve ( N, b, x, x0, a, 1+4*a );
 }
 
-void advect ( int N, int b, float * d, float * d0, float * u, float * v, float dt )
+void advect ( int N, int b, float * d, float * d0, const float * u, const float * v, float dt )
 {
 	int i, j, i0, j0, i1, j1;
 	float x, y, s0, t0, s1, t1, dt0;
@@ -99,7 +99,7 @@ void project ( int N, float * u, float * v, float * p, float * div, float* walls
 	set_bnd_walls(N, u, v, walls_norm_u, walls_norm_v, walls);
 }
 
-void dens_step ( int N, float * x, float * x0, float * u, float * v, float diff, float dt )
+void dens_step ( int N, float * x, float * x0, const float * u, const float * v, float diff, float dt )
 {
 	add_source ( N, x, x0, dt );
 	SWAP ( x0, x ); diffuse ( N, 0, x, x0, diff, dt );
