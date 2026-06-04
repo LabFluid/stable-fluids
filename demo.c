@@ -571,12 +571,12 @@ int main ( int argc, char ** argv )
             type, N, dt, diff, visc, force, source );
     }
 
-    printf ( "\n\nHow to use this demo:\n\n" );
-    printf ( "\t Add densities with the right mouse button (Random Colors!)\n" );
-    printf ( "\t Add velocities with the left mouse button and dragging the mouse\n" );
-    printf ( "\t Toggle density/velocity display with the 'v' key\n" );
-    printf ( "\t Clear the simulation by pressing the 'c' key\n" );
-    printf ( "\t Quit by pressing the 'q' key\n" );
+    printf ( "\n\nComo usar esta demo:\n\n" );
+    printf ( "\t Adicione densidades com o botão direito do mouse (Cores aleatorias!)\n" );
+    printf ( "\t Adicione velocidades com o botão esquerdo do mouse e arrastando o mouse\n" );
+    printf ( "\t Alternar a exibição de densidade/velocidade com tecla 'v'\n" );
+    printf ( "\t Limpar a simulação com a tecla 'c'\n" );
+    printf ( "\t Para sair pressione a tecla 'q'\n" );
 
     dvel = 0;
 
