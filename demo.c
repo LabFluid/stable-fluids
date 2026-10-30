@@ -9,6 +9,7 @@
 #include <math.h>       
 #include <GL/glut.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
@@ -50,6 +51,10 @@ static int mouse_down[3];
 static int omx, omy, mx, my;
 static float current_r = 1.0f, current_g = 1.0f, current_b = 1.0f; // Cor atual do pincel
 
+// Arquivo para plotar a energia cinética do sistema
+#ifdef FIN
+FILE *energy_plot;
+#endif
 /*
   ----------------------------------------------------------------------
    free/clear/allocate simulation data
@@ -64,14 +69,23 @@ static void free_data ( void )
     if ( v_prev ) free ( v_prev );
     
     // Libera RGB
-    if ( dens_r ) free ( dens_r ); if ( dens_r_prev ) free ( dens_r_prev );
-    if ( dens_g ) free ( dens_g ); if ( dens_g_prev ) free ( dens_g_prev );
-    if ( dens_b ) free ( dens_b ); if ( dens_b_prev ) free ( dens_b_prev );
+    if ( dens_r ) free ( dens_r );
+	if ( dens_r_prev ) free ( dens_r_prev );
+    if ( dens_g ) free ( dens_g );
+	if ( dens_g_prev ) free ( dens_g_prev );
+    if ( dens_b ) free ( dens_b );
+	if ( dens_b_prev ) free ( dens_b_prev );
 
     // Libera Bloom RGB
-    if ( dens_bloom_r ) free ( dens_bloom_r ); if ( ping_r ) free ( ping_r ); if ( pong_r ) free ( pong_r );
-    if ( dens_bloom_g ) free ( dens_bloom_g ); if ( ping_g ) free ( ping_g ); if ( pong_g ) free ( pong_g );
-    if ( dens_bloom_b ) free ( dens_bloom_b ); if ( ping_b ) free ( ping_b ); if ( pong_b ) free ( pong_b );
+    if ( dens_bloom_r ) free ( dens_bloom_r );
+	if ( ping_r ) free ( ping_r );
+	if ( pong_r ) free ( pong_r );
+    if ( dens_bloom_g ) free ( dens_bloom_g );
+	if ( ping_g ) free ( ping_g );
+	if ( pong_g ) free ( pong_g );
+    if ( dens_bloom_b ) free ( dens_bloom_b );
+	if ( ping_b ) free ( ping_b );
+	if ( pong_b ) free ( pong_b );
     
     if ( walls ) free ( walls );
     if (walls_norm_u) free(walls_norm_u);
@@ -498,7 +512,12 @@ static void open_glut_window ( void )
 
     glutInitWindowPosition ( 0, 0 );
     glutInitWindowSize ( win_x, win_y );
+	#ifdef MAG
+	glutInitWindowPosition(win_x+100, 0);
+    win_id = glutCreateWindow ( "Fluido Interativo Magnitude Preservada - Universo UFPR 2026" );
+	#else
     win_id = glutCreateWindow ( "Fluido Interativo - Universo UFPR 2026" );
+	#endif
 
     glClearColor ( 1.0f, 1.0f, 1.0f, 1.0f );
     glClear ( GL_COLOR_BUFFER_BIT );
@@ -514,6 +533,26 @@ static void open_glut_window ( void )
     glutReshapeFunc ( reshape_func );
     glutIdleFunc ( idle_func );
     glutDisplayFunc ( display_func );
+}
+
+
+
+void simInit(int x, int y, int r, int g, int b, float f)
+{
+	// Adiciona densidade inicial
+	for(int i = x-2; i < x+3; ++i) {
+		if(i < 0 || i >= N) continue;
+		for(int j = y-2; j < y+3; ++j) {
+			if(j < 0 || j >= N) continue;
+			dens_r[IX(i,j)] = r;
+			dens_g[IX(i,j)] = g;
+			dens_b[IX(i,j)] = b;
+		}
+	}
+
+	// Adiciona força inicial
+	if(x >= 0 && x < N && y-3 >= 0 && y-3 < N)
+		v[IX(x,y-3)] = f;
 }
 
 
@@ -571,24 +610,38 @@ int main ( int argc, char ** argv )
             type, N, dt, diff, visc, force, source );
     }
 
+	#ifndef MAG
     printf ( "\n\nComo usar esta demo:\n\n" );
     printf ( "\t Adicione densidades com o botão direito do mouse (Cores aleatorias!)\n" );
     printf ( "\t Adicione velocidades com o botão esquerdo do mouse e arrastando o mouse\n" );
     printf ( "\t Alternar a exibição de densidade/velocidade com tecla 'v'\n" );
     printf ( "\t Limpar a simulação com a tecla 'c'\n" );
     printf ( "\t Para sair pressione a tecla 'q'\n" );
+	#endif
 
     dvel = 0;
 
     if ( !allocate_data () ) exit ( 1 );
     clear_data ();
+	
+	#ifdef MAG
+	energy_plot = fopen("energy_mag.txt","w");
+	#else
+	energy_plot = fopen("energy.txt","w");
+	#endif
+	if(energy_plot == NULL)
+		perror(NULL);
 
+	// Inicia a simulação com densidades e forção padrões
+	simInit(N-N/10, N/25, 248, 504, 0, 100.0f);
 
     win_x = 512;
     win_y = 512;
     open_glut_window ();
 
     glutMainLoop ();
+
+	fclose(energy_plot);
 
     exit ( 0 );
 }

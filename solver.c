@@ -1,7 +1,20 @@
+#ifdef FIN
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
+#ifdef MAG
+#include <math.h>
+#endif
+
 #define IX(i,j) ((i)+(N+2)*(j))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 #define FOR_EACH_CELL for ( j=1 ; j<=N ; j++ ) { for ( i=1 ; i<=N ; i++ ) {
 #define END_FOR }}
+
+#ifdef FIN
+extern FILE *energy_plot;
+#endif
 
 void add_source ( int N, float * x, float * s, float dt )
 {
@@ -70,14 +83,24 @@ void advect ( int N, int b, float * d, float * d0, const float * u, const float 
 	dt0 = dt*N;
 	FOR_EACH_CELL
 		x = i-dt0*u[IX(i,j)]; y = j-dt0*v[IX(i,j)];
-		if (x<0.5f) x=0.5f; if (x>N+0.5f) x=N+0.5f; i0=(int)x; i1=i0+1;
-		if (y<0.5f) y=0.5f; if (y>N+0.5f) y=N+0.5f; j0=(int)y; j1=j0+1;
+
+		if (x<0.5f) x=0.5f;
+		if (x>N+0.5f) x=N+0.5f;
+		i0=(int)x; i1=i0+1;
+
+		if (y<0.5f) y=0.5f;
+		if (y>N+0.5f) y=N+0.5f;
+		j0=(int)y; j1=j0+1;
+
 		s1 = x-i0; s0 = 1-s1; t1 = y-j0; t0 = 1-t1;
 		d[IX(i,j)] = s0*(t0*d0[IX(i0,j0)]+t1*d0[IX(i0,j1)])+
 					 s1*(t0*d0[IX(i1,j0)]+t1*d0[IX(i1,j1)]);
 	END_FOR
 	set_bnd ( N, b, d );
 }
+
+int frame_num = 0;
+float energy;
 
 void project ( int N, float * u, float * v, float * p, float * div, float* walls_norm_u, float* walls_norm_v, float* walls )
 {
@@ -91,13 +114,50 @@ void project ( int N, float * u, float * v, float * p, float * div, float* walls
 
 	lin_solve ( N, 0, p, div, 1, 4 );
 
+	energy = 0;
 	FOR_EACH_CELL
+		float sqr_vel = u[IX(i,j)]*u[IX(i,j)]+v[IX(i,j)]*v[IX(i,j)];
+		energy += sqr_vel;
 		u[IX(i,j)] -= 0.5f*N*(p[IX(i+1,j)]-p[IX(i-1,j)]);
 		v[IX(i,j)] -= 0.5f*N*(p[IX(i,j+1)]-p[IX(i,j-1)]);
 	END_FOR
 	set_bnd ( N, 1, u ); set_bnd ( N, 2, v );
 	set_bnd_walls(N, u, v, walls_norm_u, walls_norm_v, walls);
 }
+
+#ifdef MAG // Alternate project() that preserves the magnitude of the velocity prior to the projection
+void projectMag ( int N, float * u, float * v, float * p, float * div, float* walls_norm_u, float* walls_norm_v, float* walls )
+{
+	int i, j;
+
+	FOR_EACH_CELL
+		div[IX(i,j)] = -0.5f*(u[IX(i+1,j)]-u[IX(i-1,j)]+v[IX(i,j+1)]-v[IX(i,j-1)])/N;
+		p[IX(i,j)] = 0;
+	END_FOR	
+	set_bnd ( N, 0, div ); set_bnd ( N, 0, p );
+
+	lin_solve ( N, 0, p, div, 1, 4 );
+
+	energy = 0;
+	FOR_EACH_CELL
+		float sqr_vel = u[IX(i,j)]*u[IX(i,j)]+v[IX(i,j)]*v[IX(i,j)];
+		energy += sqr_vel;
+
+		float mag = sqrt(sqr_vel);
+		u[IX(i,j)] -= 0.5f*N*(p[IX(i+1,j)]-p[IX(i-1,j)]);
+		v[IX(i,j)] -= 0.5f*N*(p[IX(i,j+1)]-p[IX(i,j-1)]);
+		
+		float mag_new = sqrt(u[IX(i,j)]*u[IX(i,j)]+v[IX(i,j)]*v[IX(i,j)]);
+		if(mag_new > 1.0e-14) {
+			u[IX(i,j)] *= mag/mag_new;
+			v[IX(i,j)] *= mag/mag_new;
+		}
+	END_FOR
+
+	set_bnd ( N, 1, u ); set_bnd ( N, 2, v );
+	set_bnd_walls(N, u, v, walls_norm_u, walls_norm_v, walls);
+}
+#endif
 
 void dens_step ( int N, float * x, float * x0, const float * u, const float * v, float diff, float dt )
 {
@@ -114,6 +174,18 @@ void vel_step ( int N, float * u, float * v, float * u0, float * v0, float visc,
 	project ( N, u, v, u0, v0, walls_norm_u, walls_norm_v, walls );
 	SWAP ( u0, u ); SWAP ( v0, v );
 	advect ( N, 1, u, u0, u0, v0, dt ); advect ( N, 2, v, v0, u0, v0, dt );
-	project ( N, u, v, u0, v0, walls_norm_u, walls_norm_v, walls );
-}
 
+	#ifdef MAG
+	projectMag ( N, u, v, u0, v0, walls_norm_u, walls_norm_v, walls );
+	#else
+	project ( N, u, v, u0, v0, walls_norm_u, walls_norm_v, walls );
+	#endif
+
+	#ifdef FIN
+	energy = (1*energy*1.0f/(N*N))/2; // K=mv²/2     Replace 1 with density of fluid and replace 1.0f/(N*N) with the area of each cell (1.0f is the total area in this case)
+	fprintf(energy_plot,"%d %.10f\n", ++frame_num, energy);
+
+	if(frame_num > 100) // Finite simultaion for testing
+		exit(1);
+	#endif
+}
