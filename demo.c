@@ -624,6 +624,7 @@ int main ( int argc, char ** argv )
     if ( !allocate_data () ) exit ( 1 );
     clear_data ();
 	
+	#ifdef FIN
 	#ifdef MAG
 	energy_plot = fopen("energy_mag.txt","w");
 	#else
@@ -631,6 +632,7 @@ int main ( int argc, char ** argv )
 	#endif
 	if(energy_plot == NULL)
 		perror(NULL);
+	#endif
 
 	// Inicia a simulação com densidades e forção padrões
 	simInit(N-N/10, N/25, 248, 504, 0, 100.0f);
@@ -641,7 +643,9 @@ int main ( int argc, char ** argv )
 
     glutMainLoop ();
 
+	#ifdef FIN
 	fclose(energy_plot);
+	#endif
 
     exit ( 0 );
 }

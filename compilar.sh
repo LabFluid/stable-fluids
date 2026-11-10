@@ -4,11 +4,11 @@ if [ -z "$1" ]; then
 	$GCC_COMMAND -o demo -DFIN &
 	$GCC_COMMAND -o demo_mag -DFIN -DMAG
 	wait
-elif [ "$1" = "inf" ]; then
+elif [ "$1" = "-i" ]; then
 	$GCC_COMMAND -o demo  &
 	$GCC_COMMAND -o demo_mag -DMAG
 	wait
-elif [ "$1" = "r" ]; then
+elif [ "$1" = "-r" ]; then
 	./demo &
 	./demo_mag
 	wait
